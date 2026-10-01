@@ -1,0 +1,204 @@
+export const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat']
+export const TIMES=['8:30','9:00','9:30']
+export const dayCount=d=>Math.round(d.filter(Boolean).length*4.4)
+export const fare=n=>5*12*2*n // Rs 5 per rider-km x 12 km (example) x 2 trips x days
+export const tm=(t,d)=>{const [h,m]=t.split(':').map(Number),x=h*60+m+d;return Math.floor(x/60)+':'+String(x%60).padStart(2,'0')}
+export const win=t=>tm(t,-8)+'–'+t
+export const NOTES=[
+['Set up once','<strong>Decide once.</strong> Home, office and arrive-by time replace the daily "find a ride" ritual. No map search, no destination typing.'],
+['Pick your pass','<strong>The commute is a contract.</strong> One monthly price, payable by rider or employer. Employer staff-transport spend is the first to convert.'],
+['Morning','<strong>Zero decisions.</strong> The home screen answers one question: when does my Link arrive. Pausing is one tap, so people stay subscribed.'],
+['The guarantee','<strong>A window, not a promise of exact minutes.</strong> If it is at risk, a backup ride and an automatic credit happen without a claim. Try the traffic switch.'],
+['One QR, every leg','<strong>Transit is a partner, not a rival.</strong> Link fills the first and last mile, and one QR covers Link, metro and bus.'],
+['Month view','<strong>Reliability is visible.</strong> On-time count and credits feed the north star, Daily Reliable Commuters.']]
+import {useStore} from './store'
+import {NOTES} from './data'
+import {Setup,Pass,Today,Trip,Transit,Month} from './screens'
+const SCR=[Setup,Pass,Today,Trip,Transit,Month]
+const toggleTheme=()=>{const d=document.documentElement,c=d.dataset.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');d.dataset.theme=c==='dark'?'light':'dark'}
+export default function App(){
+  const [s,set,reset]=useStore(),go=i=>set({step:i}),Cur=SCR[s.step]
+  return <>
+    <div className="wrap">
+      <div className="side">
+        <h1>Ola Daily</h1>
+        <p className="sub">Your commute, subscribed. Tap through the rider journey on the phone.</p>
+        <nav className="rail">{NOTES.map((n,i)=><button key={n[0]} className={i===s.step?'on':''} onClick={()=>go(i)}><b>{i+1}</b>{n[0]}</button>)}</nav>
+        <p className="note" dangerouslySetInnerHTML={{__html:NOTES[s.step][1]}}/>
+        <p className="legend">Ola Electric APM assignment prototype. Places, price and ride data are examples only. Price uses the ₹5 per rider-km hypothesis.</p>
+      </div>
+      <div className="phone" role="application" aria-label="Ola Daily app">
+        <div className="sb"><span>8:41</span><span>5G ▮▮▮</span></div>
+        <section className="scr on" key={s.step}><Cur s={s} set={set} go={go} reset={reset}/></section>
+      </div>
+    </div>
+    <button className="themebtn" onClick={toggleTheme}>Light / Dark</button>
+  </>
+}
+import {createRoot} from 'react-dom/client'
+import App from './App'
+import './styles.css'
+createRoot(document.getElementById('root')).render(<App/>)
+import {useEffect,useMemo} from 'react'
+import {DAYS,TIMES,dayCount,fare,tm,win} from './data'
+const Logo=({t})=><div className="logo"><i/>{t}</div>
+const Sw=({on,onClick,children})=><label className={'sw'+(on?' on':'')} onClick={onClick}><span/>{children}</label>
+const price=s=>fare(dayCount(s.days)).toLocaleString('en-IN')
+
+export const Setup=({s,set,go})=><>
+  <Logo t="Ola Daily"/><h2>Set up your commute once</h2>
+  <p className="m">We plan the rest. You decide again only when your routine changes.</p>
+  <div className="card"><div className="lbl">From</div><div className="val">Home · Indiranagar</div></div>
+  <div className="card"><div className="lbl">To</div><div className="val">Office · Manyata Tech Park</div></div>
+  <div><div className="lbl">Arrive by</div><div className="chips">{TIMES.map(t=><button key={t} className={'chip'+(s.arrive===t?' on':'')} onClick={()=>set({arrive:t})}>{t}</button>)}</div></div>
+  <div><div className="lbl">Days</div><div className="chips">{DAYS.map((d,i)=><button key={d} className={'chip'+(s.days[i]?' on':'')} onClick={()=>set({days:s.days.map((v,j)=>j===i?1-v:v)})}>{d}</button>)}</div></div>
+  <button className="cta" disabled={!s.days.some(Boolean)} onClick={()=>go(1)}>See my Daily Pass</button>
+</>
+
+export const Pass=({s,set,go})=><>
+  <Logo t="Ola Daily"/><h2>One price. Every leg.</h2>
+  <div className="card"><div className="lbl">Daily Pass</div><div className="big">₹{price(s)}<span className="m"> /month</span></div>
+    <p className="m" style={{marginTop:8}}>Example: ₹5 × 12 km × 2 trips × {dayCount(s.days)} days</p></div>
+  <ul className="ck"><li>Seat reserved on every ride</li><li>Link, metro and bus on one QR</li><li>Backup ride if your window is at risk</li><li>Fare credit on next month if we miss it</li></ul>
+  <div><div className="lbl">Who pays</div><div className="seg">{['Me','My employer'].map((p,i)=><button key={p} className={s.payer===i?'on':''} onClick={()=>set({payer:i})}>{p}</button>)}</div></div>
+  <div className="card"><div className="val">Commute group</div><div className="m">Indiranagar → Manyata · {win(s.arrive)}<br/>5 co-riders · 1 seat left</div></div>
+  <button className="cta" onClick={()=>{set({subscribed:true,mins:4});go(2)}}>{s.subscribed?'Open today':'Join group and subscribe'}</button>
+</>
+
+export function Today({s,set}){
+  useEffect(()=>{const t=setInterval(()=>set(o=>o.mins>0?{mins:o.mins-1}:{}),4000);return()=>clearInterval(t)},[])
+  return <>
+    <div className="row"><Logo t="Today"/><span className="m">{s.leave?'Pass paused':'Mon · to office'}</span></div>
+    <div><div className="lbl">{s.mins?'Your Link arrives in':'Your Link is'}</div><div className="big ok">{s.mins?s.mins+' min':'here'}</div></div>
+    <svg viewBox="0 0 340 130" style={{width:'100%',borderRadius:18,background:'#141414'}} aria-label="Route map">
+      <path d="M0 90H340M60 0V130M200 0V130M0 30L340 60" stroke="#262626" strokeWidth="6" fill="none"/>
+      <path d="M60 100L60 60 130 60" stroke="#8f8f8f" strokeWidth="2" strokeDasharray="2 5" fill="none"/>
+      <path d="M290 30L200 50 130 60" stroke="#d4f000" strokeWidth="3" fill="none"/>
+      <circle cx="60" cy="100" r="6" fill="#fff"/><circle cx="130" cy="60" r="8" fill="#000" stroke="#d4f000" strokeWidth="3"/>
+      <rect x={282-(4-s.mins)*18} y="22" width="18" height="14" rx="4" fill="#d4f000"/></svg>
+    <div className="card row"><div><div className="val">Stop B · 3 min walk</div><div className="m">Seat 4 reserved · 5 co-riders</div></div><span className="ok">●</span></div>
+    <div className="card"><div className="lbl">Reach Manyata Tech Park</div><div className="val">{win(s.arrive)}</div></div>
+    <button className="cta" onClick={()=>set({step:3,prog:0,traffic:false,tripCredited:false})}>Tap to board</button>
+    <button className="ghost" onClick={()=>set({paused:!s.paused})}>{s.paused?'Paused tomorrow · tap to undo':'Skip / pause tomorrow'}</button>
+  </>
+}
+
+export function Trip({s,set,go}){
+  useEffect(()=>{const t=setInterval(()=>set(o=>o.prog<100?{prog:Math.min(100,o.prog+(o.traffic?1:5))}:{}),1000);return()=>clearInterval(t)},[])
+  const late=s.traffic,end=s.prog>=100
+  const toggle=()=>set(o=>o.traffic?{traffic:false}:{traffic:true,tripCredited:true,credits:o.tripCredited?o.credits:o.credits+1})
+  return <>
+    <div className="row"><Logo t="On the way"/><span className="m">Seat 4</span></div>
+    <div><div className="lbl">{end?'Arrived':'Arriving'}</div><div className={'big '+(late?'bad':'ok')}>{tm(s.arrive,late?14:-4)}</div>
+      <p className="m">{late?(end?'Outside your window · credit applied':'Outside your window, so a backup ride is on its way'):(end?'You arrived inside your window':'Inside your '+win(s.arrive)+' window')}</p></div>
+    <div className={'bar'+(late?' late':'')}><i style={{width:s.prog+'%'}}/></div>
+    <div className={'banner'+(late?' on':'')}><b className="bad">Running late? Window at risk &gt;10 min</b><span>Backup ride dispatched automatically. It reaches you at the next stop.</span><span className="ok">Fare credit added to next month</span></div>
+    <div className="card"><div className="lbl">Guarantee</div><div className="val">Reach by {s.arrive} or we make it right</div><p className="m" style={{marginTop:4}}>Backup ride, then auto-credit. No claim form.</p></div>
+    <Sw on={late} onClick={toggle}>Prototype: simulate heavy traffic</Sw>
+    <button className="cta" onClick={()=>go(4)}>Next: a metro commute</button>
+  </>
+}
+
+export function Transit({go}){
+  const cells=useMemo(()=>{let sd=7;const r=()=>(sd=(sd*9301+49297)%233280)/233280,o=[]
+    for(let y=0;y<13;y++)for(let x=0;x<13;x++){const f=(x<5||x>7)&&(y<5||y>7)&&!(x>7&&y>7)
+      if(f){const dx=x<5?x:x-8,dy=y<5?y:y-8,d=Math.max(Math.abs(dx-2),Math.abs(dy-2));o.push(d!==1)}else o.push(r()>.5)}
+    return o},[])
+  return <>
+    <Logo t="Link → Metro → Link"/><h2>One QR. Tap in.</h2>
+    <div className="qr" aria-label="Sample QR code">{cells.map((k,i)=><s key={i} className={k?'k':''}/>)}</div>
+    <div style={{display:'flex',flexDirection:'column',gap:16,marginTop:6}}>
+      {[['Link to metro station','6 min · seat reserved',''],['Metro','Included in your pass','o'],['Link to office gate','Waiting when you exit','']].map(([a,b,c])=>
+        <div className="leg" key={a}><span className={'dot '+c}/><div><div className="val">{a}</div><div className="m">{b}</div></div></div>)}
+    </div>
+    <button className="cta" onClick={()=>go(5)}>View my month</button>
+  </>
+}
+
+export const Month=({s,set,reset})=><>
+  <Logo t="This month"/>
+  <div className="card"><div className="lbl">On-time commutes (sample)</div><div className="big"><span className="ok">21</span><span className="m"> of 22</span></div><div className="bar" style={{marginTop:12}}><i style={{width:'95%'}}/></div></div>
+  <div className="card"><div className="val">{s.credits} fare credit{s.credits>1?'s':''}</div><div className="m">Applied to next month automatically</div></div>
+  <div className="card row"><div><div className="val">Daily Pass</div><div className="m">Renews on the 1st · paid by {s.payer?'your employer':'you'}</div></div><span className="val">₹{price(s)}</span></div>
+  <Sw on={s.leave} onClick={()=>set({leave:!s.leave})}>Pause the pass for a week of leave</Sw>
+  <p className="m">Pausing a day or a week never loses your seat in the commute group.</p>
+  <button className="cta" onClick={reset}>Restart prototype</button>
+</>
+
+import {useState,useEffect} from 'react'
+const K='ola-daily-v1'
+export const init={step:0,arrive:'9:00',days:[1,1,1,1,1,0],payer:0,subscribed:false,paused:false,leave:false,traffic:false,tripCredited:false,credits:1,mins:4,prog:0}
+const load=()=>{try{return {...init,...JSON.parse(localStorage.getItem(K))}}catch{return init}}
+export function useStore(){
+  const [s,S]=useState(load)
+  useEffect(()=>{try{localStorage.setItem(K,JSON.stringify(s))}catch{}},[s])
+  const set=p=>S(o=>({...o,...(typeof p==='function'?p(o):p)}))
+  return [s,set,()=>S(init)]
+}
+
+:root{--bg:#f1f1f1;--fg:#000;--mut:#5f5f5f;--line:#d6d6d6;--on:#000;--onfg:#fff;
+--p0:#000;--p1:#141414;--p2:#222;--pt:#fff;--pm:#8f8f8f;--acc:#d4f000;--warn:#ff5a3c;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--fg:#fff;--mut:#999;--line:#2a2a2a;--on:#d4f000;--onfg:#000}}
+:root[data-theme="dark"]{--bg:#000;--fg:#fff;--mut:#999;--line:#2a2a2a;--on:#d4f000;--onfg:#000}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.wrap{max-width:980px;margin:0 auto;padding:28px 20px 40px;display:grid;grid-template-columns:1fr 380px;gap:56px;align-items:start}
+.side h1{font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1.05}
+.side p.sub{color:var(--mut);margin:10px 0 28px;max-width:34ch;line-height:1.5}
+.rail{display:flex;flex-direction:column;gap:2px;margin-bottom:26px}
+.rail button{display:flex;gap:14px;align-items:baseline;text-align:left;padding:10px 0;border-bottom:1px solid var(--line);color:var(--mut);font-weight:500;font-size:15px}
+.rail button b{font-size:12px;width:18px;font-variant-numeric:tabular-nums}
+.rail button.on{color:var(--fg);font-weight:700}
+.rail button.on b{background:var(--on);color:var(--onfg);border-radius:4px;padding:1px 0;text-align:center}
+.note{font-size:14px;line-height:1.55;color:var(--mut);max-width:42ch;min-height:5.5em}
+.note strong{color:var(--fg)}
+.legend{font-size:12px;color:var(--mut);margin-top:22px;max-width:44ch;line-height:1.5}
+.phone{width:380px;height:min(760px,calc(100svh - 56px));background:var(--p0);color:var(--pt);border-radius:40px;border:8px solid #1c1c1c;box-shadow:0 0 0 1px #333,0 24px 60px rgba(0,0,0,.35);overflow:hidden;position:sticky;top:20px;display:flex;flex-direction:column}
+.sb{display:flex;justify-content:space-between;font-size:12px;font-weight:600;padding:12px 24px 0;color:var(--pt)}
+.scr{display:none;flex-direction:column;flex:1;min-height:0;padding:18px 20px 20px;overflow-y:auto;gap:14px}
+.scr.on{display:flex;animation:in .25s ease}
+@keyframes in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.scr.on{animation:none}}
+.logo{font-weight:800;letter-spacing:-.02em;font-size:15px;display:flex;align-items:center;gap:8px}
+.logo i{width:10px;height:10px;border-radius:50%;background:var(--acc)}
+h2{font-size:27px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+.m{color:var(--pm);font-size:13px;line-height:1.45}
+.card{background:var(--p1);border-radius:18px;padding:14px 16px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.lbl{font-size:12px;color:var(--pm);margin-bottom:3px}
+.val{font-size:16px;font-weight:600}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:9px 14px;border-radius:999px;background:var(--p2);font-size:14px;font-weight:600;color:var(--pm)}
+.chip.on{background:var(--acc);color:#000}
+.cta{margin-top:auto;background:var(--acc);color:#000;font-weight:700;font-size:16px;padding:16px;border-radius:16px;width:100%}
+.ghost{background:var(--p2);color:var(--pt);font-weight:600;padding:14px;border-radius:16px;width:100%;font-size:15px}
+.big{font-size:44px;font-weight:800;letter-spacing:-.04em;line-height:1}
+.ok{color:var(--acc)}.bad{color:var(--warn)}
+.ck{list-style:none;padding:0;display:flex;flex-direction:column;gap:9px;font-size:14px}
+.ck li{display:flex;gap:10px}.ck li:before{content:"✓";color:var(--acc);font-weight:800}
+.seg{display:flex;background:var(--p2);border-radius:12px;padding:3px}
+.seg button{flex:1;padding:9px;border-radius:9px;font-size:14px;font-weight:600;color:var(--pm)}
+.seg button.on{background:var(--pt);color:#000}
+.bar{height:6px;background:var(--p2);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc);border-radius:3px;transition:width .6s}
+.bar.late i{background:var(--warn)}
+.banner{border-radius:16px;padding:14px 16px;background:rgba(255,90,60,.14);border:1px solid var(--warn);display:none;flex-direction:column;gap:6px;font-size:14px}
+.banner.on{display:flex}
+.leg{display:flex;gap:14px;align-items:flex-start}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--acc);margin-top:4px;flex:none}
+.dot.o{background:var(--p0);border:2px solid var(--pm)}
+.qr{background:#fff;padding:10px;border-radius:14px;width:140px;height:140px;display:grid;grid-template-columns:repeat(13,1fr);gap:0;margin:0 auto}
+.qr s{background:#fff}.qr s.k{background:#000}
+.sw{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--pm);cursor:pointer}
+.sw span{width:38px;height:22px;border-radius:11px;background:var(--p2);position:relative;transition:.2s}
+.sw span:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--pm);transition:.2s}
+.sw.on span{background:var(--acc)}.sw.on span:after{left:19px;background:#000}
+.themebtn{position:fixed;right:max(14px,env(safe-area-inset-right,0px));bottom:max(14px,env(safe-area-inset-bottom,0px));background:var(--on);color:var(--onfg);font-size:12px;font-weight:700;padding:9px 14px;border-radius:999px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:20px;padding:16px 12px 70px}.side{order:1}.phone{order:2;position:relative;top:0;margin:0 auto;width:min(380px,100%)}.side h1{font-size:26px}.side p.sub{margin-bottom:14px}.rail{flex-direction:row;overflow-x:auto;margin-bottom:12px;gap:14px}.rail button{border:0;white-space:nowrap;padding:6px 0}.note{min-height:0}.legend{display:none}}
+
+.cta:disabled{opacity:.4;cursor:not-allowed}
+
